@@ -105,7 +105,7 @@
                 video.srcObject = stream;
                 video.play();
                 isStreaming = true;
-                sendFrames(video);
+                sendFrames();
                 alert('Your webcam is turning on');
             } catch (error) {
                 console.error('Error accessing webcam:', error);
