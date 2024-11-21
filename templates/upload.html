@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Upload and Process</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn:disabled {
+            background-color: #b0b0b0;
+            cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+            background-color: #0a0efc;
+        }
+        .download-btn {
+            display: none;
+            text-decoration: none;
+            background-color: #cf5668;
+        }
+        .download-btn.btn:hover:not(:disabled){
+            background-color: #b3001b;
+        }
+        input[type="file"] {
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload and Process Video</h1>
+    <form id="upload-form">
+        <input type="file" id="video-upload" accept="video/*" required>
+        <button type="button" id="process-btn" class="btn">Start Processing</button>
+        <a id="download-btn" class="btn download-btn" href="" download>Download Processed Video</a>
+    </form>
+
+    <script>
+        const processButton = document.getElementById('process-btn');
+        const downloadButton = document.getElementById('download-btn');
+        const videoInput = document.getElementById('video-upload');
+
+        processButton.addEventListener('click', () => {
+            const file = videoInput.files[0];
+            if (!file) {
+                alert('Please select a video to upload!');
+                return;
+            }
+            downloadButton.style.display = 'none';
+            processButton.disabled = true;
+            processButton.textContent = 'Processing...';
+
+            // Simulate file upload and processing
+            const formData = new FormData();
+            formData.append('video', file);
+
+            // Replace with actual server endpoint
+            fetch('/process_video', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    pollStatus();
+                } else {
+                    console.error(error);
+                    alert('Error processing video!');
+                    processButton.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                alert('Error processing video!');
+                processButton.disabled = false;
+            });
+        });
+        function pollStatus() {
+            const interval = setInterval(() => {
+                fetch('/check_status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'completed') {
+                            clearInterval(interval);
+                            downloadButton.href = data.download_url;
+                            downloadButton.style.display = 'inline-block';
+                            processButton.textContent = 'Start Processing';
+                            processButton.disabled = false;
+                        }else if (data.status === 'error') {
+                            clearInterval(interval);
+                            console.error(error);
+                            alert('Error processing video!');
+                            processButton.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        clearInterval(interval);
+                        alert('Error processing video!');
+                        console.error(error);   
+                    });
+            }, 5000);  // Poll every 5 seconds
+        }
+    </script>
+</body>
+</html>
