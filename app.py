@@ -1,13 +1,13 @@
 from flask import Flask,render_template,request,jsonify,send_from_directory,current_app,url_for
-import base64
 import logging
 logging.basicConfig(level=logging.DEBUG)
 import os
 from functions import process_bytes,process_uploaded_video,initialize
 import threading
+from flask_socketio import SocketIO
 
 app = Flask(__name__)
-
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 processing_status = None
 files = None
@@ -26,35 +26,12 @@ def upload_video():
     return render_template("upload.html")
 
 
-@app.route('/process_frame', methods=['POST'])
-def process_frame():
-    try:
-        print("inside route")
-        data = request.json
-        frame_data = data.get('frame')
-        if not frame_data:
-            return jsonify({'message': 'No frame data provided'}), 400
-        if not frame_data.startswith('data:image/jpeg;base64,'):
-            return jsonify({'message': 'Frame data is not properly Base64 encoded'}), 400
-        frame_data = frame_data[len('data:image/jpeg;base64,'):]
-        if not frame_data:
-            return jsonify({'message': 'Frame data is empty after base64 split'}), 400
-        try:
-            image_bytes = base64.b64decode(frame_data)
-        except (base64.binascii.Error, ValueError) as e:
-            return jsonify({'message': 'Failed to decode Base64 frame data'}), 400
-        if len(image_bytes) < 1000:
-            logging.error('Decoded image data is too short')
-            return jsonify({'message': 'Decoded image data is too short'}), 400
-        processed_frame_base64 = process_bytes(image_bytes)
-        
-        if not processed_frame_base64:       
-            return jsonify({'message': 'Error processing frame'}), 500
-        return jsonify({'processed_frame': f"data:image/jpeg;base64,{processed_frame_base64}"})
-    
-    except Exception as e:
-        logging.error(f"Unexpected error in /process_frame route: {e}")
-        return jsonify({'message': 'Unexpected error occurred during frame processing'}), 500
+@socketio.on('send_frame')
+def handle_frame(data):
+    frame_data = data['frame']
+    processed_frame = process_bytes(frame_data)
+    socketio.emit('receive_frame', {'frame': f'data:image/jpeg;base64,{processed_frame}'})
+
 
 @app.route('/process_video', methods=['POST'])
 def process_video():
@@ -113,4 +90,7 @@ def download_file(filename):
     return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
 
 portno = os.getenv("PORT")
-app.run(host='0.0.0.0',port=portno)
+# app.run(host='0.0.0.0',port=portno)
+socketio.run(app, host='0.0.0.0', port=portno)
+
+# socketio.run(app, host='0.0.0.0', port=5000)

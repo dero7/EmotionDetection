@@ -1,175 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Video</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <style>
-        .video-box {
-            width: 70vh;
-            height: 50vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 0 auto;
-            background-color: #8d8888; 
-            border-radius: 8px; 
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-        }
-    
-        canvas {
-            width: 100%;
-            height: 100%;
-            border-radius: 8px;
-        }
-        
-        #controls {
-            margin: 20px;
-            text-align: center;
-        }
-        #start, #stop {
-            padding: 10px 20px;
-            font-size: 16px;
-            margin: 5px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            color: white;
-        }
-        #start {
-            background-color: #28a745;
-        }
-        #start:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-    
-        #stop {
-            background-color: #dc3545;
-        }
-        #stop:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        body {
-            background: linear-gradient(to right, #c4b6f5, #706efa, #3458f6);
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .container {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            width: 90%;
-            max-width: 1000px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Processed Video</title>
+  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
 </head>
+<style>
+    .video-box {
+        width: 70vh;
+        height: 50vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto;
+        background-color: #8d8888; 
+        border-radius: 8px; 
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    }
 
+    img {
+        width: 100%;
+        height: 100%;
+        border-radius: 8px;
+    }
+    
+    #controls {
+        margin: 20px;
+        text-align: center;
+    }
+    #start, #stop {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin: 5px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        color: white;
+    }
+    #start {
+        background-color: #28a745;
+    }
+    #start:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+    }
+
+    #stop {
+        background-color: #dc3545;
+    }
+    #stop:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+    }
+    body {
+        background: linear-gradient(to right, #c4b6f5, #706efa, #3458f6);
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        margin: 0;
+    }
+    .container {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        width: 90%;
+        max-width: 1000px;
+    }
+</style>
 <body>
-    <div id="controls">
-        <h1>Live Detector</h1>
-        <div class="video-box">
-            <canvas id="processedCanvas" ></canvas> 
-        </div>
-        <button id="start" type="button" onclick="startVideo()">Start</button>
-        <button id="stop" type="button" onclick="stopVideo()" disabled>Stop</button>
+<div id="controls">
+    <h1>Live Detection</h1>
+    <div class="video-box">    
+        <img id="received-frame" />
     </div>
-    <script>
-        let stream;
-        const canvas = document.getElementById('processedCanvas');
-        const context = canvas.getContext('2d');
-        let isStreaming = false;
-        const startButton = document.getElementById('start');
-        const stopButton = document.getElementById('stop');
-        const video = document.createElement('video');
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+</div>
 
-        function startVideo() {
-            if (!isStreaming) {
-                startStreaming();
-            }
-        }
-        function stopVideo() {
-            if (isStreaming) {
-                stopStreaming();
-            }
-        }
-        async function startStreaming() {
+  <script>
+    const receivedFrame = document.getElementById('received-frame');
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+
+    const socket = io('https://emotiondetection-6qlx.onrender.com');
+    // const socket = io('http://localhost:5000'); 
+
+    let streaming = false;
+    let videoStream = null;
+
+    // Access the camera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoStream = stream;
+        return stream;
+      } catch (error) {
+        alert('Error accessing the camera: ' + error.message);
+        throw error;
+      }
+    }
+
+    let intervalId = null; // Used to manage the interval for sending frames
+
+    function sendFrame() {
+        if (!streaming || !videoStream) return;
+
+        const videoElement = document.createElement("video");
+        videoElement.srcObject = videoStream;
+        videoElement.play();
+
+        videoElement.onloadeddata = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const context = canvas.getContext('2d');
+
+            intervalId = setInterval(() => {
             try {
-                startButton.disabled = true;
-                stopButton.disabled = false;
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-                video.play();
-                isStreaming = true;
-                sendFrames();
-                alert('Your webcam is turning on');
+                if (!streaming) return;
+
+                // Draw video frame to canvas
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+                // Get base64 encoded image
+                const frameData = canvas.toDataURL('image/jpeg');
+                socket.emit('send_frame', { frame: frameData });
             } catch (error) {
-                console.error('Error accessing webcam:', error);
-                alert('Failed to access webcam. Please check permissions and try again.');
+                console.error("Error capturing frame:", error.message);
             }
+            }, 150); // Send frames every 50ms
+        };
+    }
+
+    // Start sending frames
+    startBtn.addEventListener('click', async () => {
+      await startCamera();
+      streaming = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      sendFrame();
+    });
+
+    // Stop sending frames
+    stopBtn.addEventListener('click', () => {
+        streaming = false;
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
         }
-        function stopStreaming() {
-            if (stream) {
-                startButton.disabled = false;
-                stopButton.disabled = true;
-                video.srcObject = null;
-                stream.getTracks().forEach(track => track.stop());
-                isStreaming = false;
-                alert('Your webcam is turning off');
-            }
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
         }
-        async function sendFrames() {
-            if (!isStreaming) return;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const frame = canvas.toDataURL('image/jpeg');
-            if (!frame || !frame.startsWith('data:image/jpeg;base64,')) {
-                console.error('Frame data is not valid:', frame);
-                return;
-            }
-            try {
-                const response = await fetch('/process_frame', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ frame })
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.processed_frame) {
-                        const img = new Image();
-                        img.onload = function() {
-                            context.clearRect(0, 0, canvas.width, canvas.height);
-                            context.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        };
-                        img.src = data.processed_frame;
-                        if (data.bounding_boxes && Array.isArray(data.bounding_boxes)) {
-                            data.bounding_boxes.forEach(box => {
-                                const { x, y, width, height, label } = box;
-                                console.log('Drawing box:', { x, y, width, height });
-                                context.beginPath();
-                                context.rect(x, y, width, height);
-                                context.lineWidth = 2;
-                                context.strokeStyle = 'red';
-                                context.stroke();
-                                context.font = '12px Arial';
-                                context.fillStyle = 'red';
-                                context.fillText(label, x, y > 10 ? y - 5 : 10);
-                            });
-                        }
-                    } else {
-                        console.error('Invalid processed frame data:', data.processed_frame);
-                    }
-                } else {
-                    console.error('Failed to process frame:', response.statusText);
-                }
-            } catch (error) {
-                console.error('Error sending frame:', error);
-            }
-            requestAnimationFrame(sendFrames);
-        }
-    </script>
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    });
+
+    // Receive and display processed frames from server
+    socket.on('receive_frame', (data) => {
+      receivedFrame.src = data.frame; // Display the processed frame
+    });
+  </script>
 </body>
 </html>

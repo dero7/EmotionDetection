@@ -9,17 +9,30 @@ model_best = load_model('face_model.h5')
 class_names = ['Angry', 'Disgusted', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-def process_bytes(data):
-    nparr = np.frombuffer(data, np.uint8)
-    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
+def process_bytes(frame_data):
+    header, encoded = frame_data.split(',', 1)
+    decoded = base64.b64decode(encoded)
+    np_data = np.frombuffer(decoded, dtype=np.uint8)
+    frame = cv2.imdecode(np_data, cv2.IMREAD_COLOR)
+
     frame = process_frame(frame)
     
-    success, buffer = cv2.imencode('.jpg', frame)
-    if not success:
-        raise ValueError("Failed to encode image")
+    _, buffer = cv2.imencode('.jpg', frame)
     processed_frame = base64.b64encode(buffer).decode('utf-8')
     return processed_frame
+
+# this is for normal function without socket io 
+# def process_bytes(data):
+#     nparr = np.frombuffer(data, np.uint8)
+#     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+#     frame = process_frame(frame)
+    
+#     success, buffer = cv2.imencode('.jpg', frame)
+#     if not success:
+#         raise ValueError("Failed to encode image")
+#     processed_frame = base64.b64encode(buffer).decode('utf-8')
+#     return processed_frame
 
 def process_frame(frame):
     if frame is None:

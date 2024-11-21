@@ -2,3 +2,5 @@ Flask
 opencv-python
 tensorflow
 gunicorn
+flask-socketio
+eventlet
